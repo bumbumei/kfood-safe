@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import KakaoMap from "@/components/KakaoMap";
 import type { Restaurant } from "@/lib/types";
 
 type Source = "kto" | "busan-food" | "busan-safe";
+type View = "list" | "map";
 
 const SOURCES: { key: Source; label: string; desc: string }[] = [
   {
@@ -23,10 +25,12 @@ const SOURCES: { key: Source; label: string; desc: string }[] = [
   },
 ];
 
-const ROWS = 12;
+const LIST_ROWS = 12;
+const MAP_ROWS = 200; // markers are cheap — show a wide net on the map
 
 export default function RestaurantsPage() {
   const [source, setSource] = useState<Source>("busan-food");
+  const [view, setView] = useState<View>("list");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Restaurant[]>([]);
@@ -34,42 +38,66 @@ export default function RestaurantsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (src: Source, keyword: string, pageNo: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        source: src,
-        page: String(pageNo),
-        rows: String(ROWS),
-      });
-      if (src === "kto" && keyword.trim()) params.set("q", keyword.trim());
-      const res = await fetch(`/api/restaurants?${params}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      setData(json.restaurants ?? []);
-      setTotal(json.totalCount ?? 0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (src: Source, keyword: string, pageNo: number, mode: View) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          source: src,
+          page: String(pageNo),
+          rows: String(mode === "map" ? MAP_ROWS : LIST_ROWS),
+        });
+        if (src === "kto" && keyword.trim()) params.set("q", keyword.trim());
+        const res = await fetch(`/api/restaurants?${params}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        setData(json.restaurants ?? []);
+        setTotal(json.totalCount ?? 0);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load");
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    load(source, q, page);
+    load(source, q, page, view);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, page]);
+  }, [source, page, view]);
 
-  const totalPages = Math.max(1, Math.ceil(total / ROWS));
+  const totalPages = Math.max(1, Math.ceil(total / (view === "map" ? MAP_ROWS : LIST_ROWS)));
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Busan Restaurants</h1>
-      <p className="mt-1 text-sm text-stone-500">
-        Live data from Korea Tourism Organization and Busan Metropolitan City open APIs.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Busan Restaurants</h1>
+          <p className="mt-1 text-sm text-stone-500">
+            Live data from Korea Tourism Organization and Busan Metropolitan City open
+            APIs.
+          </p>
+        </div>
+        <div className="flex shrink-0 rounded-xl border border-stone-300 bg-white p-1 text-sm font-medium">
+          {(["list", "map"] as View[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => {
+                setView(v);
+                setPage(1);
+              }}
+              className={`rounded-lg px-4 py-1.5 capitalize transition ${
+                view === v ? "bg-stone-900 text-white" : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              {v === "list" ? "☰ List" : "🗺️ Map"}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         {SOURCES.map((s) => (
@@ -97,7 +125,7 @@ export default function RestaurantsPage() {
           onSubmit={(e) => {
             e.preventDefault();
             setPage(1);
-            load("kto", q, 1);
+            load("kto", q, 1, view);
           }}
         >
           <input
@@ -141,7 +169,13 @@ export default function RestaurantsPage() {
         </p>
       )}
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {view === "map" && (
+        <div className="mt-4">
+          <KakaoMap restaurants={data} />
+        </div>
+      )}
+
+      <div className={view === "map" ? "hidden" : "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
         {data.map((r) => (
           <div
             key={r.id}

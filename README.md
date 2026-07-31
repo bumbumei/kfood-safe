@@ -12,7 +12,7 @@ Korean food is full of hidden ingredients foreign visitors can't guess: fish sau
 
 | Route | Feature |
 |---|---|
-| `/dishes` | Ingredient & allergen guide for 24+ common Korean dishes with traffic-light safety ratings per diet |
+| `/dishes` | Ingredient & allergen guide for 50+ common Korean dishes with traffic-light safety ratings per diet |
 | `/restaurants` | Live Busan restaurant explorer — KTO tourism data + Busan city's official guide + 3,101 city-certified safe restaurants |
 | `/cards` | Allergy communication cards in Korean to show restaurant staff (print/PDF friendly) |
 
@@ -39,7 +39,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4. API keys st
 ## Roadmap
 
 - [ ] Menu photo OCR → instant ingredient analysis
-- [ ] Kakao Map integration with diet filters
+- [x] Kakao Map integration (marker clustering, needs NEXT_PUBLIC_KAKAO_MAP_KEY)
 - [ ] User dietary profile (localStorage → accounts)
-- [ ] Expand ingredient DB to 100+ dishes
+- [x] Ingredient DB expanded to 53 dishes (target 100+)
 - [ ] Seoul/Incheon expansion (phase 2)

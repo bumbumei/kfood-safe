@@ -5,7 +5,7 @@ const FEATURES = [
     href: "/dishes",
     emoji: "🍲",
     title: "Korean Dish Guide",
-    desc: "Traffic-light safety ratings for 24+ common dishes — hidden allergens like jeotgal in kimchi or wheat in gochujang, explained.",
+    desc: "Traffic-light safety ratings for 50+ common dishes — hidden allergens like jeotgal in kimchi or wheat in gochujang, explained.",
     cta: "Check a dish",
   },
   {
