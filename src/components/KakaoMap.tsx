@@ -95,22 +95,46 @@ export default function KakaoMap({ restaurants }: { restaurants: Restaurant[] })
     return (
       <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50 p-8 text-center">
         <p className="text-3xl">🗺️</p>
-        <p className="mt-3 font-semibold">Kakao Map key not configured</p>
-        <p className="mt-2 max-w-md text-sm text-stone-500">
-          Get a free JavaScript key at{" "}
-          <a
-            href="https://developers.kakao.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-emerald-600 underline"
-          >
-            developers.kakao.com
-          </a>{" "}
-          (My Application → App Key → JavaScript key, and register{" "}
-          <code className="rounded bg-stone-200 px-1">http://localhost:3000</code> as a
-          Web platform domain), then add it to <code className="rounded bg-stone-200 px-1">.env.local</code> as{" "}
-          <code className="rounded bg-stone-200 px-1">NEXT_PUBLIC_KAKAO_MAP_KEY</code>.
-        </p>
+        {failed ? (
+          <>
+            <p className="mt-3 font-semibold">Kakao Maps SDK failed to load</p>
+            <p className="mt-2 max-w-md text-sm text-stone-500">
+              The key is set, but Kakao rejected the request — usually this means the
+              current domain (<code className="rounded bg-stone-200 px-1">{typeof window !== "undefined" ? window.location.origin : ""}</code>)
+              is not registered. In{" "}
+              <a
+                href="https://developers.kakao.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-600 underline"
+              >
+                developers.kakao.com
+              </a>{" "}
+              open your app → 앱 설정 → 플랫폼 → Web and add this exact origin to 사이트
+              도메인. Also check 카카오맵 활성화 (제품 설정 → 카카오맵 → ON).
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="mt-3 font-semibold">Kakao Map key not configured</p>
+            <p className="mt-2 max-w-md text-sm text-stone-500">
+              Get a free JavaScript key at{" "}
+              <a
+                href="https://developers.kakao.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-600 underline"
+              >
+                developers.kakao.com
+              </a>{" "}
+              (My Application → App Key → JavaScript key, and register{" "}
+              <code className="rounded bg-stone-200 px-1">http://localhost:3000</code> as
+              a Web platform domain), then add it to{" "}
+              <code className="rounded bg-stone-200 px-1">.env.local</code> as{" "}
+              <code className="rounded bg-stone-200 px-1">NEXT_PUBLIC_KAKAO_MAP_KEY</code>.
+            </p>
+          </>
+        )}
       </div>
     );
   }
