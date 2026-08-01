@@ -83,6 +83,16 @@ export function bestDishMatch(text: string): Dish | null {
   return best;
 }
 
+/** Does this restaurant text (name + menu) mention one specific dish? */
+export function textMatchesDish(text: string, dishId: string): boolean {
+  const entry = DISH_TERMS.find((x) => x.dish.id === dishId);
+  if (!entry || !text) return false;
+  const compact = compactLatin(text);
+  return (
+    entry.ko.some((t) => text.includes(t)) || entry.latin.some((t) => compact.includes(t))
+  );
+}
+
 const LEVEL_RANK: Record<SafetyLevel, number> = { safe: 0, caution: 1, avoid: 2 };
 
 export interface DietRating {

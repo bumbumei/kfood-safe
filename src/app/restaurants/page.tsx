@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import KakaoMap from "@/components/KakaoMap";
 import MenuSafety from "@/components/MenuSafety";
-import { DIET_LABELS } from "@/data/dishes";
-import { dietSortKey, rateForDiet } from "@/lib/match";
+import { DIET_LABELS, DISHES } from "@/data/dishes";
+import { dietSortKey, rateForDiet, textMatchesDish } from "@/lib/match";
 import type { DietKey, Restaurant, SafetyLevel } from "@/lib/types";
 
 type Source = "kto" | "busan-food" | "busan-safe";
@@ -47,11 +47,20 @@ export default function RestaurantsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Restaurant | null>(null);
+  const [dishFilter, setDishFilter] = useState<string | null>(null);
   // Full-dataset cache per source so toggling diet/map doesn't refetch
   const allCache = useRef<Partial<Record<Source, Restaurant[]>>>({});
 
-  // Map view and diet matching both need the whole dataset
-  const allMode = view === "map" || diet !== null;
+  // Deep link from the Dish Guide: /restaurants?dish=<id>
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("dish");
+    if (p && DISHES.some((d) => d.id === p)) setDishFilter(p);
+  }, []);
+
+  const filterDish = dishFilter ? DISHES.find((d) => d.id === dishFilter) : null;
+
+  // Map view, diet matching, and dish filtering all need the whole dataset
+  const allMode = view === "map" || diet !== null || dishFilter !== null;
 
   useEffect(() => {
     let cancelled = false;
@@ -104,13 +113,16 @@ export default function RestaurantsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, page, allMode]);
 
-  /** Rated + sorted rows (diet mode); plain rows otherwise */
+  /** Dish-filtered, then rated + sorted rows (diet mode); plain rows otherwise */
   const rated = useMemo(() => {
-    if (!diet) return data.map((r) => ({ r, rating: null }));
-    return data
+    const base = dishFilter
+      ? data.filter((r) => textMatchesDish(`${r.name} ${r.menu ?? ""}`, dishFilter))
+      : data;
+    if (!diet) return base.map((r) => ({ r, rating: null }));
+    return base
       .map((r) => ({ r, rating: rateForDiet(`${r.name} ${r.menu ?? ""}`, diet) }))
       .sort((a, b) => dietSortKey(a.rating!) - dietSortKey(b.rating!));
-  }, [data, diet]);
+  }, [data, diet, dishFilter]);
 
   const matchedCount = useMemo(
     () => (diet ? rated.filter((x) => x.rating?.level !== null).length : 0),
@@ -170,6 +182,27 @@ export default function RestaurantsPage() {
           </button>
         ))}
       </div>
+
+      {filterDish && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+          <span>
+            🍽️ Showing places serving{" "}
+            <strong>
+              {filterDish.nameKo} · {filterDish.nameEn.split(" (")[0]}
+            </strong>
+          </span>
+          <button
+            onClick={() => {
+              setDishFilter(null);
+              setPage(1);
+              window.history.replaceState(null, "", "/restaurants");
+            }}
+            className="ml-auto rounded-full bg-white px-2.5 py-0.5 text-xs text-stone-500 shadow-sm hover:text-stone-800"
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">

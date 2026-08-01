@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { DISHES, DIET_LABELS, ALLERGEN_LABELS } from "@/data/dishes";
+import { DISH_IMAGES } from "@/data/dish-images";
 import type { DietKey, SafetyLevel } from "@/lib/types";
 
 const LEVEL_STYLE: Record<SafetyLevel, string> = {
@@ -84,8 +86,22 @@ export default function DishesPage() {
           return (
             <div
               key={d.id}
-              className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
+              className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
             >
+              {DISH_IMAGES[d.id] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={DISH_IMAGES[d.id]}
+                  alt={d.nameEn}
+                  className="h-40 w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-amber-50 to-stone-100 text-5xl">
+                  🍲
+                </div>
+              )}
+              <div className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-bold">
@@ -134,10 +150,22 @@ export default function DishesPage() {
                   ))}
                 </div>
               )}
+
+              <Link
+                href={`/restaurants?dish=${d.id}`}
+                className="mt-4 block rounded-xl border border-emerald-200 bg-emerald-50 py-2 text-center text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                📍 Find restaurants serving this
+              </Link>
+              </div>
             </div>
           );
         })}
       </div>
+
+      <p className="mt-8 text-center text-[11px] text-stone-400">
+        Dish photos: Wikipedia / Wikimedia Commons (CC licenses)
+      </p>
 
       {filtered.length === 0 && (
         <p className="mt-12 text-center text-sm text-stone-400">
