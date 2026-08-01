@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import KakaoMap from "@/components/KakaoMap";
-import type { Restaurant } from "@/lib/types";
+import { DIET_LABELS } from "@/data/dishes";
+import { dietSortKey, rateForDiet } from "@/lib/match";
+import type { DietKey, Restaurant, SafetyLevel } from "@/lib/types";
 
 type Source = "kto" | "busan-food" | "busan-safe";
 type View = "list" | "map";
@@ -25,51 +27,99 @@ const SOURCES: { key: Source; label: string; desc: string }[] = [
   },
 ];
 
-const LIST_ROWS = 12;
-const MAP_ROWS = 200; // markers are cheap — show a wide net on the map
+const PAGE_SIZE = 12;
+
+const LEVEL_BADGE: Record<SafetyLevel, { style: string; label: string }> = {
+  safe: { style: "bg-emerald-100 text-emerald-800", label: "🟢 Safe pick" },
+  caution: { style: "bg-amber-100 text-amber-800", label: "🟡 Ask first" },
+  avoid: { style: "bg-red-100 text-red-700", label: "🔴 Not suitable" },
+};
 
 export default function RestaurantsPage() {
   const [source, setSource] = useState<Source>("busan-food");
   const [view, setView] = useState<View>("list");
+  const [diet, setDiet] = useState<DietKey | null>(null);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Restaurant[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Full-dataset cache per source so toggling diet/map doesn't refetch
+  const allCache = useRef<Partial<Record<Source, Restaurant[]>>>({});
 
-  const load = useCallback(
-    async (src: Source, keyword: string, pageNo: number, mode: View) => {
+  // Map view and diet matching both need the whole dataset
+  const allMode = view === "map" || diet !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({
-          source: src,
-          page: String(pageNo),
-          rows: String(mode === "map" ? MAP_ROWS : LIST_ROWS),
-        });
-        if (src === "kto" && keyword.trim()) params.set("q", keyword.trim());
-        const res = await fetch(`/api/restaurants?${params}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-        setData(json.restaurants ?? []);
-        setTotal(json.totalCount ?? 0);
+        if (allMode) {
+          const cached = allCache.current[source];
+          if (cached) {
+            setData(cached);
+            setTotal(cached.length);
+            return;
+          }
+          const res = await fetch(`/api/restaurants?source=${source}&all=1`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+          if (cancelled) return;
+          const restaurants: Restaurant[] = json.restaurants ?? [];
+          allCache.current[source] = restaurants;
+          setData(restaurants);
+          setTotal(restaurants.length);
+        } else {
+          const params = new URLSearchParams({
+            source,
+            page: String(page),
+            rows: String(PAGE_SIZE),
+          });
+          if (source === "kto" && q.trim()) params.set("q", q.trim());
+          const res = await fetch(`/api/restaurants?${params}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+          if (cancelled) return;
+          setData(json.restaurants ?? []);
+          setTotal(json.totalCount ?? 0);
+        }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load");
-        setData([]);
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load");
+          setData([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    },
-    [],
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, page, allMode]);
+
+  /** Rated + sorted rows (diet mode); plain rows otherwise */
+  const rated = useMemo(() => {
+    if (!diet) return data.map((r) => ({ r, rating: null }));
+    return data
+      .map((r) => ({ r, rating: rateForDiet(`${r.name} ${r.menu ?? ""}`, diet) }))
+      .sort((a, b) => dietSortKey(a.rating!) - dietSortKey(b.rating!));
+  }, [data, diet]);
+
+  const matchedCount = useMemo(
+    () => (diet ? rated.filter((x) => x.rating?.level !== null).length : 0),
+    [rated, diet],
   );
 
-  useEffect(() => {
-    load(source, q, page, view);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, page, view]);
-
-  const totalPages = Math.max(1, Math.ceil(total / (view === "map" ? MAP_ROWS : LIST_ROWS)));
+  const totalPages = allMode
+    ? Math.max(1, Math.ceil(rated.length / PAGE_SIZE))
+    : Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const visible = allMode ? rated.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : rated;
+  const mapData = useMemo(() => rated.map((x) => x.r), [rated]);
 
   return (
     <div>
@@ -119,13 +169,42 @@ export default function RestaurantsPage() {
         ))}
       </div>
 
-      {source === "kto" && (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+          My diet:
+        </span>
+        {(Object.keys(DIET_LABELS) as DietKey[]).map((k) => (
+          <button
+            key={k}
+            onClick={() => {
+              setDiet(diet === k ? null : k);
+              setPage(1);
+            }}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+              diet === k
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : "border-stone-300 bg-white text-stone-600 hover:border-stone-400"
+            }`}
+          >
+            {DIET_LABELS[k]}
+          </button>
+        ))}
+        {diet && (
+          <span className="text-xs text-stone-500">
+            — sorted by safest menu match ({matchedCount.toLocaleString()} matched)
+          </span>
+        )}
+      </div>
+
+      {source === "kto" && !allMode && (
         <form
           className="mt-3 flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             setPage(1);
-            load("kto", q, 1, view);
+            setData([]);
+            // re-trigger paginated effect via state churn
+            setTotal(0);
           }}
         >
           <input
@@ -141,26 +220,34 @@ export default function RestaurantsPage() {
       )}
 
       <div className="mt-4 flex items-center justify-between text-sm text-stone-500">
-        <span>{loading ? "Loading…" : `${total.toLocaleString()} restaurants`}</span>
-        <div className="flex items-center gap-2">
-          <button
-            disabled={page <= 1 || loading}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-lg border border-stone-300 px-3 py-1 disabled:opacity-40"
-          >
-            ←
-          </button>
-          <span>
-            {page} / {totalPages.toLocaleString()}
-          </span>
-          <button
-            disabled={page >= totalPages || loading}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg border border-stone-300 px-3 py-1 disabled:opacity-40"
-          >
-            →
-          </button>
-        </div>
+        <span>
+          {loading
+            ? "Loading…"
+            : `${(allMode ? rated.length : total).toLocaleString()} restaurants${
+                view === "map" ? " on map" : ""
+              }`}
+        </span>
+        {view === "list" && (
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => p - 1)}
+              className="rounded-lg border border-stone-300 px-3 py-1 disabled:opacity-40"
+            >
+              ←
+            </button>
+            <span>
+              {page} / {totalPages.toLocaleString()}
+            </span>
+            <button
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-lg border border-stone-300 px-3 py-1 disabled:opacity-40"
+            >
+              →
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -171,12 +258,17 @@ export default function RestaurantsPage() {
 
       {view === "map" && (
         <div className="mt-4">
-          <KakaoMap restaurants={data} />
+          <KakaoMap restaurants={mapData} />
+          {diet && (
+            <p className="mt-2 text-xs text-stone-400">
+              Tip: switch to List view to see per-restaurant {DIET_LABELS[diet]} ratings.
+            </p>
+          )}
         </div>
       )}
 
       <div className={view === "map" ? "hidden" : "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
-        {data.map((r) => (
+        {visible.map(({ r, rating }) => (
           <div
             key={r.id}
             className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
@@ -200,11 +292,26 @@ export default function RestaurantsPage() {
               </h2>
               <p className="mt-1 line-clamp-2 text-xs text-stone-500">{r.address}</p>
               {r.menu && (
-                <p className="mt-2 line-clamp-1 text-xs text-emerald-700">
-                  🍴 {r.menu}
-                </p>
+                <p className="mt-2 line-clamp-1 text-xs text-emerald-700">🍴 {r.menu}</p>
               )}
               {r.tel && <p className="mt-1 text-xs text-stone-400">☎ {r.tel}</p>}
+
+              {rating && rating.level !== null && (
+                <div className="mt-2 space-y-1">
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${LEVEL_BADGE[rating.level].style}`}
+                  >
+                    {LEVEL_BADGE[rating.level].label}
+                    {rating.dishes[0] ? ` · ${rating.dishes[0].nameEn.split(" (")[0]}` : ""}
+                  </span>
+                  {rating.dishes.length > 1 && (
+                    <p className="text-[11px] text-stone-400">
+                      Also serves: {rating.dishes.slice(1).map((d) => d.nameKo).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {r.source === "busan-safe" && (
                 <span className="mt-2 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                   ✓ City-certified safe restaurant
@@ -215,7 +322,7 @@ export default function RestaurantsPage() {
         ))}
       </div>
 
-      {!loading && !error && data.length === 0 && (
+      {!loading && !error && rated.length === 0 && (
         <p className="mt-12 text-center text-sm text-stone-400">No results.</p>
       )}
     </div>

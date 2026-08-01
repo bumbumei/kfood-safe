@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { ktoRestaurants, ktoSearch, type KtoLang } from "@/lib/kto";
 import { busanFood, busanSafe } from "@/lib/busan";
 
+/** Single-call page sizes that return each source's full dataset (verified live) */
+const ALL_ROWS: Record<string, number> = {
+  "busan-safe": 3200,
+  "busan-food": 500,
+  kto: 100,
+};
+
 /**
  * GET /api/restaurants
  *   ?source=kto|busan-food|busan-safe   (default kto)
@@ -9,12 +16,14 @@ import { busanFood, busanSafe } from "@/lib/busan";
  *   &q=keyword                          (kto only)
  *   &cat=A05020100                      (kto only, cat3 code)
  *   &page=1&rows=20
+ *   &all=1                              (fetch the entire dataset in one page)
  */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const source = sp.get("source") ?? "kto";
-  const page = Number(sp.get("page") ?? "1");
-  const rows = Number(sp.get("rows") ?? "20");
+  const all = sp.get("all") === "1";
+  const page = all ? 1 : Number(sp.get("page") ?? "1");
+  const rows = all ? (ALL_ROWS[source] ?? 100) : Number(sp.get("rows") ?? "20");
   const lang = (sp.get("lang") ?? "en") as KtoLang;
 
   try {
