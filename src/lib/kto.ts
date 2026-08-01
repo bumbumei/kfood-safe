@@ -98,6 +98,33 @@ export async function ktoRestaurants(opts: {
   return { restaurants: items.map(toRestaurant), totalCount };
 }
 
+export interface KtoRestaurantDetail {
+  firstmenu: string;
+  treatmenu: string;
+  opentime: string;
+  restdate: string;
+}
+
+/** Menu & hours from detailIntro2 (firstmenu / treatmenu verified live) */
+export async function ktoDetail(
+  contentId: string,
+  lang: KtoLang = "en",
+): Promise<KtoRestaurantDetail> {
+  const { items } = await callKto(lang, "detailIntro2", {
+    contentId,
+    contentTypeId: FOOD_TYPE[lang],
+    numOfRows: "1",
+    pageNo: "1",
+  });
+  const it = (items[0] ?? {}) as unknown as Record<string, string>;
+  return {
+    firstmenu: it.firstmenu ?? "",
+    treatmenu: it.treatmenu ?? "",
+    opentime: it.opentimefood ?? "",
+    restdate: it.restdatefood ?? "",
+  };
+}
+
 /** Keyword search across KTO tourism restaurants */
 export async function ktoSearch(opts: {
   keyword: string;

@@ -15,6 +15,11 @@ const TERM_OVERRIDES: Record<string, { ko?: string[]; latin?: string[] }> = {
   galbi: { ko: ["갈비", "갈비살", "왕갈비"], latin: ["galbi", "kalbi"] },
   "dwaeji-gukbap": { ko: ["돼지국밥", "국밥"], latin: ["gukbap"] },
   eomuk: { ko: ["어묵", "오뎅"], latin: ["eomuk", "odeng", "fishcake", "fish cake"] },
+  // Romanization variants: ㄸ is written tteok/ddeok/dduk/topokki depending on the shop
+  bindaetteok: { latin: ["bindaetteok", "bindaeddeok", "bindaedduk"] },
+  tteokbokki: { latin: ["tteokbokki", "ddeokbokki", "topokki", "tteokpokki", "dukbokki"] },
+  hotteok: { latin: ["hotteok", "hoddeok", "hodduk"] },
+  tteokguk: { latin: ["tteokguk", "ddeokguk"] },
 };
 
 interface DishTerms {
@@ -50,6 +55,32 @@ export function matchDishes(text: string): Dish[] {
     if (hitKo || hitLatin) matched.push(dish);
   }
   return matched;
+}
+
+/**
+ * Best single dish for one menu-item string: the dish whose matched term is
+ * longest (most specific) wins — e.g. "물회" resolves to mulhoe, not hoe.
+ */
+export function bestDishMatch(text: string): Dish | null {
+  if (!text) return null;
+  const compact = compactLatin(text);
+  let best: Dish | null = null;
+  let bestLen = 0;
+  for (const { dish, ko, latin } of DISH_TERMS) {
+    for (const t of ko) {
+      if (t.length > bestLen && text.includes(t)) {
+        best = dish;
+        bestLen = t.length;
+      }
+    }
+    for (const t of latin) {
+      if (t.length > bestLen && compact.includes(t)) {
+        best = dish;
+        bestLen = t.length;
+      }
+    }
+  }
+  return best;
 }
 
 const LEVEL_RANK: Record<SafetyLevel, number> = { safe: 0, caution: 1, avoid: 2 };

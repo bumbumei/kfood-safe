@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import KakaoMap from "@/components/KakaoMap";
+import MenuSafety from "@/components/MenuSafety";
 import { DIET_LABELS } from "@/data/dishes";
 import { dietSortKey, rateForDiet } from "@/lib/match";
 import type { DietKey, Restaurant, SafetyLevel } from "@/lib/types";
@@ -45,6 +46,7 @@ export default function RestaurantsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Restaurant | null>(null);
   // Full-dataset cache per source so toggling diet/map doesn't refetch
   const allCache = useRef<Partial<Record<Source, Restaurant[]>>>({});
 
@@ -271,7 +273,8 @@ export default function RestaurantsPage() {
         {visible.map(({ r, rating }) => (
           <div
             key={r.id}
-            className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+            onClick={() => setSelected(r)}
+            className="cursor-pointer overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
           >
             {r.image ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -324,6 +327,10 @@ export default function RestaurantsPage() {
 
       {!loading && !error && rated.length === 0 && (
         <p className="mt-12 text-center text-sm text-stone-400">No results.</p>
+      )}
+
+      {selected && (
+        <MenuSafety restaurant={selected} diet={diet} onClose={() => setSelected(null)} />
       )}
     </div>
   );
