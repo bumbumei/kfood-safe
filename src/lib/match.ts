@@ -1,5 +1,5 @@
 import { DISHES } from "@/data/dishes";
-import type { Dish, DietKey, SafetyLevel } from "./types";
+import type { Allergen, Dish, DietKey, SafetyLevel } from "./types";
 
 /**
  * Matches restaurant text (name + representative menu, Korean or romanized)
@@ -114,4 +114,25 @@ export function rateForDiet(text: string, diet: DietKey): DietRating {
 export function dietSortKey(rating: DietRating): number {
   if (rating.level === null) return 2;
   return rating.level === "avoid" ? 3 : LEVEL_RANK[rating.level];
+}
+
+/**
+ * Combined diet + allergy rating. Dishes containing any selected allergen are
+ * disqualified; the restaurant is rated by its best remaining dish. If every
+ * matched dish conflicts with the profile, the rating is "avoid".
+ */
+export function rateForProfile(
+  text: string,
+  diet: DietKey | null,
+  allergens: Allergen[],
+): DietRating {
+  const matched = matchDishes(text);
+  if (matched.length === 0) return { level: null, dishes: [] };
+  const ok = allergens.length
+    ? matched.filter((d) => !d.allergens.some((a) => allergens.includes(a)))
+    : matched;
+  if (ok.length === 0) return { level: "avoid", dishes: [] };
+  const levelOf = (d: Dish): SafetyLevel => (diet ? d.diet[diet] : "safe");
+  const sorted = [...ok].sort((a, b) => LEVEL_RANK[levelOf(a)] - LEVEL_RANK[levelOf(b)]);
+  return { level: levelOf(sorted[0]), dishes: sorted.slice(0, 3) };
 }
