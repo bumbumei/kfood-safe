@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ktoRestaurants, ktoSearch, type KtoLang } from "@/lib/kto";
+import { ktoNearby, ktoRestaurants, ktoSearch, type KtoLang } from "@/lib/kto";
 import { busanFood, busanSafe } from "@/lib/busan";
 
 /** Single-call page sizes that return each source's full dataset (verified live) */
@@ -33,6 +33,19 @@ export async function GET(req: NextRequest) {
     if (source === "busan-food") {
       return NextResponse.json(
         await busanFood({ lang: lang === "ko" ? "ko" : "en", page, rows }),
+      );
+    }
+    const lat = sp.get("lat");
+    const lng = sp.get("lng");
+    if (lat && lng) {
+      return NextResponse.json(
+        await ktoNearby({
+          lat: Number(lat),
+          lng: Number(lng),
+          radius: Number(sp.get("radius") ?? "2000"),
+          lang,
+          rows: 50,
+        }),
       );
     }
     const q = sp.get("q");

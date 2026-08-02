@@ -2,12 +2,16 @@ export interface Attraction {
   id: string;
   nameKo: string;
   nameEn: string;
-  emoji: string;
+  emoji?: string;
+  image?: string | null;
   lat: number;
   lng: number;
 }
 
-/** Major Busan tourist spots — 1st-launch curation for the nearby-restaurant search */
+/**
+ * Pinned "popular" Busan spots for instant recognition. The full attraction
+ * list (116+) is loaded live from KTO TourAPI via /api/attractions.
+ */
 export const ATTRACTIONS: Attraction[] = [
   { id: "haeundae", nameKo: "해운대해수욕장", nameEn: "Haeundae Beach", emoji: "🏖️", lat: 35.1587, lng: 129.1604 },
   { id: "gwangalli", nameKo: "광안리해수욕장", nameEn: "Gwangalli Beach", emoji: "🌉", lat: 35.1532, lng: 129.1189 },

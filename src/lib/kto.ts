@@ -11,6 +11,8 @@ export type KtoLang = keyof typeof SERVICES;
 
 /** Restaurant contentTypeId differs per language service: 39 (Korean) vs 82 (foreign) */
 const FOOD_TYPE: Record<KtoLang, string> = { ko: "39", en: "82", zh: "82", ja: "82" };
+/** Tourist-attraction contentTypeId: 12 (Korean) vs 76 (foreign services) */
+const ATTRACTION_TYPE: Record<KtoLang, string> = { ko: "12", en: "76", zh: "76", ja: "76" };
 
 interface KtoItem {
   contentid: string;
@@ -95,6 +97,60 @@ export async function ktoRestaurants(opts: {
     params.cat3 = opts.cat3;
   }
   const { items, totalCount } = await callKto(lang, "areaBasedList2", params);
+  return { restaurants: items.map(toRestaurant), totalCount };
+}
+
+export interface KtoAttraction {
+  id: string;
+  nameEn: string;
+  nameKo: string;
+  lat: number;
+  lng: number;
+  image: string | null;
+}
+
+/** Busan tourist attractions from KTO areaBasedList2 (116 verified live) */
+export async function ktoAttractions(lang: KtoLang = "en"): Promise<KtoAttraction[]> {
+  const { items } = await callKto(lang, "areaBasedList2", {
+    areaCode: "6",
+    contentTypeId: ATTRACTION_TYPE[lang],
+    arrange: "Q",
+    numOfRows: "200",
+    pageNo: "1",
+  });
+  return items
+    .filter((it) => it.mapx && it.mapy)
+    .map((it) => {
+      const paren = /\(([^)]+)\)\s*$/.exec(it.title);
+      return {
+        id: `kto-attr-${it.contentid}`,
+        nameEn: it.title.replace(/\s*\([^)]*\)\s*$/, "").trim(),
+        nameKo: paren ? paren[1].trim() : "",
+        lat: parseFloat(it.mapy!),
+        lng: parseFloat(it.mapx!),
+        image: it.firstimage || it.firstimage2 || null,
+      };
+    });
+}
+
+/** KTO radius search around a point — locationBasedList2, distance-sorted */
+export async function ktoNearby(opts: {
+  lat: number;
+  lng: number;
+  radius: number;
+  lang?: KtoLang;
+  rows?: number;
+}): Promise<{ restaurants: Restaurant[]; totalCount: number }> {
+  const lang = opts.lang ?? "en";
+  const { items, totalCount } = await callKto(lang, "locationBasedList2", {
+    mapX: String(opts.lng),
+    mapY: String(opts.lat),
+    radius: String(Math.min(opts.radius, 20000)),
+    contentTypeId: FOOD_TYPE[lang],
+    arrange: "E", // distance order
+    numOfRows: String(opts.rows ?? 50),
+    pageNo: "1",
+  });
   return { restaurants: items.map(toRestaurant), totalCount };
 }
 

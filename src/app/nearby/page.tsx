@@ -42,7 +42,28 @@ export default function NearbyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Restaurant | null>(null);
+  const [ktoSpots, setKtoSpots] = useState<Attraction[]>([]);
+  const [spotQuery, setSpotQuery] = useState("");
+  const [ktoNear, setKtoNear] = useState<Restaurant[]>([]);
   const loaded = useRef(false);
+  const ktoNearCache = useRef<Record<string, Restaurant[]>>({});
+
+  // Full Busan attraction list (116+) from KTO TourAPI
+  useEffect(() => {
+    fetch("/api/attractions")
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j.attractions)) {
+          setKtoSpots(
+            j.attractions.map((a: Attraction & { image: string | null }) => ({
+              ...a,
+              emoji: undefined,
+            })),
+          );
+        }
+      })
+      .catch(() => {}); // pinned list still works without it
+  }, []);
 
   // Load & merge both Busan datasets once (cached server-side too)
   useEffect(() => {
@@ -73,9 +94,38 @@ export default function NearbyPage() {
       .finally(() => setLoading(false));
   }, [spot]);
 
+  // KTO locationBasedList2 radius search around the selected spot (merged in)
+  useEffect(() => {
+    if (!spot) {
+      setKtoNear([]);
+      return;
+    }
+    const cached = ktoNearCache.current[spot.id];
+    if (cached) {
+      setKtoNear(cached);
+      return;
+    }
+    fetch(`/api/restaurants?source=kto&lat=${spot.lat}&lng=${spot.lng}&radius=2000`)
+      .then((r) => r.json())
+      .then((j) => {
+        const list: Restaurant[] = j.restaurants ?? [];
+        ktoNearCache.current[spot.id] = list;
+        setKtoNear(list);
+      })
+      .catch(() => setKtoNear([]));
+  }, [spot]);
+
+  /** Busan datasets + KTO nearby, deduped by Korean name */
+  const mergedData = useMemo(() => {
+    if (ktoNear.length === 0) return data;
+    const koName = (n: string) => (/\(([^)]+)\)/.exec(n)?.[1] ?? n).trim();
+    const seen = new Set(data.map((r) => koName(r.name)));
+    return [...data, ...ktoNear.filter((r) => !seen.has(koName(r.name)))];
+  }, [data, ktoNear]);
+
   const results = useMemo(() => {
     if (!spot) return [];
-    return data
+    return mergedData
       .filter((r) => r.lat != null && r.lng != null)
       .map((r) => ({
         r,
@@ -88,18 +138,18 @@ export default function NearbyPage() {
         const k = dietSortKey(a.rating) - dietSortKey(b.rating);
         return k !== 0 ? k : a.dist - b.dist;
       });
-  }, [data, spot, radius, diet, allergens, hideUnsuitable]);
+  }, [mergedData, spot, radius, diet, allergens, hideUnsuitable]);
 
   const excluded = useMemo(() => {
     if (!spot || !hideUnsuitable) return 0;
-    return data.filter(
+    return mergedData.filter(
       (r) =>
         r.lat != null &&
         r.lng != null &&
         distanceMeters(spot.lat, spot.lng, r.lat, r.lng) <= radius &&
         rateForProfile(`${r.name} ${r.menu ?? ""}`, diet, allergens).level === "avoid",
     ).length;
-  }, [data, spot, radius, diet, allergens, hideUnsuitable]);
+  }, [mergedData, spot, radius, diet, allergens, hideUnsuitable]);
 
   const toggleAllergen = (a: Allergen) =>
     setAllergens((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
@@ -132,6 +182,64 @@ export default function NearbyPage() {
           </button>
         ))}
       </div>
+
+      {ktoSpots.length > 0 && (
+        <div className="mt-3">
+          <input
+            value={spotQuery}
+            onChange={(e) => setSpotQuery(e.target.value)}
+            placeholder={`Search ${ktoSpots.length} more Busan attractions from Korea Tourism Organization…`}
+            className="w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          />
+          {spotQuery.trim() && (
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {ktoSpots
+                .filter((a) =>
+                  `${a.nameEn} ${a.nameKo}`
+                    .toLowerCase()
+                    .includes(spotQuery.trim().toLowerCase()),
+                )
+                .slice(0, 8)
+                .map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      setSpot(a);
+                      setSpotQuery("");
+                    }}
+                    className="overflow-hidden rounded-xl border border-stone-200 bg-white text-left transition hover:border-emerald-500"
+                  >
+                    {a.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={a.image} alt={a.nameEn} className="h-20 w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-20 w-full items-center justify-center bg-stone-100 text-xl">📍</div>
+                    )}
+                    <div className="p-2">
+                      <p className="line-clamp-1 text-sm font-semibold">{a.nameEn}</p>
+                      <p className="text-xs text-stone-400">{a.nameKo}</p>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {spot && !ATTRACTIONS.some((a) => a.id === spot.id) && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+          <span>
+            📍 <strong>{spot.nameEn}</strong> {spot.nameKo && `· ${spot.nameKo}`}{" "}
+            <span className="text-stone-400">(from KTO TourAPI)</span>
+          </span>
+          <button
+            onClick={() => setSpot(null)}
+            className="ml-auto rounded-full bg-white px-2.5 py-0.5 text-xs text-stone-500 shadow-sm"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
@@ -282,6 +390,11 @@ export default function NearbyPage() {
                     {r.source === "busan-safe" && (
                       <span className="mt-2 ml-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                         ✓ Certified
+                      </span>
+                    )}
+                    {r.source === "kto" && (
+                      <span className="mt-2 ml-1 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+                        KTO TourAPI
                       </span>
                     )}
                   </div>
