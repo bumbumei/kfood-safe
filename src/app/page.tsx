@@ -16,6 +16,13 @@ const FEATURES = [
     cta: "Explore Busan",
   },
   {
+    href: "/scan",
+    emoji: "📷",
+    title: "Scan a Menu",
+    desc: "Photograph any Korean menu board — on-device OCR reads it and flags each dish against your diet. Nothing is uploaded.",
+    cta: "Scan now",
+  },
+  {
     href: "/cards",
     emoji: "🗣️",
     title: "Allergy Cards",
@@ -55,7 +62,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {FEATURES.map((f) => (
           <Link
             key={f.href}

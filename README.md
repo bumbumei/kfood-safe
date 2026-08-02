@@ -38,7 +38,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4. API keys st
 
 ## Roadmap
 
-- [ ] Menu photo OCR → instant ingredient analysis
+- [x] Menu photo OCR → instant ingredient analysis (on-device Tesseract.js, kor+eng)
 - [x] Kakao Map integration (marker clustering, needs NEXT_PUBLIC_KAKAO_MAP_KEY)
 - [ ] User dietary profile (localStorage → accounts)
 - [x] Ingredient DB expanded to 82 dishes with photos (target 100+)
